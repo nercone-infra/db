@@ -1,0 +1,110 @@
+services:
+  ruconet:
+    container_name: db-ruconet
+    image: ghcr.io/nercone-infra/ruconet-node:latest
+    restart: unless-stopped
+    init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    cap_add:
+      - NET_ADMIN
+    sysctls:
+      net.ipv4.conf.all.src_valid_mark: 1
+    dns:
+      - 127.0.0.1
+    dns_opt:
+      - trust-ad
+    environment:
+      - RUCONET_NAME=db
+      - RUCONET_PRIVATE_KEY=${RUCONET_PRIVATE_KEY:?RUCONET_PRIVATE_KEY is required}
+      - RUCONET_PRESHARED_KEY=${RUCONET_PRESHARED_KEY:?RUCONET_PRESHARED_KEY is required}
+      - RUCONET_HUB_PUBLIC_KEY=${RUCONET_HUB_PUBLIC_KEY:?RUCONET_HUB_PUBLIC_KEY is required}
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/ruconet-node", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  cert:
+    container_name: db-cert
+    image: ghcr.io/nercone-infra/ruconet-cert:latest
+    restart: unless-stopped
+    init: true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    network_mode: service:ruconet
+    volumes:
+      - ./data/certs:/etc/certs
+    environment:
+      - CERT_BUNDLES=ruconet
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/cert-agent", "health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      ruconet:
+        condition: service_started
+        restart: true
+
+  tls:
+    container_name: db-tls
+    image: ghcr.io/nercone-infra/ruconet-tls:latest
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    network_mode: service:ruconet
+    volumes:
+      - ./tls:/etc/nginx.d:ro
+      - ./data/certs:/etc/certs:ro
+    depends_on:
+      ruconet:
+        condition: service_started
+        restart: true
+
+  postgres:
+    container_name: db-postgres
+    image: postgres:18-alpine
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    network_mode: service:ruconet
+    command:
+      - -c
+      - listen_addresses=127.0.0.1
+      - -c
+      - hba_file=/etc/postgres/pg_hba.conf
+    volumes:
+      - ./data/postgres:/var/lib/postgresql
+      - ./postgres/initdb.d:/docker-entrypoint-initdb.d:ro
+      - ./postgres:/etc/postgres:ro
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - GITEA_DB_PASSWORD=${GITEA_DB_PASSWORD}
+      - MAIL_DB_PASSWORD=${MAIL_DB_PASSWORD}
+      - ROUNDCUBE_DB_PASSWORD=${ROUNDCUBE_DB_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    depends_on:
+      ruconet:
+        condition: service_started
+        restart: true
