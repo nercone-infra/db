@@ -5,4 +5,4 @@ cd "$(dirname "$0")"
 
 sudo git pull
 
-docker compose kill -s HUP postgres
+docker compose exec -u postgres postgres pg_ctl reload
