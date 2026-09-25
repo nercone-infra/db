@@ -1,7 +1,8 @@
 services:
   ruconet:
     container_name: db-ruconet
-    image: ghcr.io/nercone-infra/ruconet-node:latest
+    image: ghcr.io/nercone-infra/ruconet:latest
+    command: ["/usr/local/bin/ruconet-node"]
     restart: unless-stopped
     init: true
     logging:
@@ -18,6 +19,9 @@ services:
       - 127.0.0.1
     dns_opt:
       - trust-ad
+    volumes:
+      - ./ruconet:/etc/ruconet.d:ro
+      - ./data/certs:/etc/certs:ro
     environment:
       - RUCONET_NAME=db
       - RUCONET_PRIVATE_KEY=${RUCONET_PRIVATE_KEY:?RUCONET_PRIVATE_KEY is required}
@@ -51,24 +55,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
-    depends_on:
-      ruconet:
-        condition: service_started
-        restart: true
-
-  tls:
-    container_name: db-tls
-    image: ghcr.io/nercone-infra/ruconet-tls:latest
-    restart: unless-stopped
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
-    network_mode: service:ruconet
-    volumes:
-      - ./tls:/etc/nginx.d:ro
-      - ./data/certs:/etc/certs:ro
     depends_on:
       ruconet:
         condition: service_started

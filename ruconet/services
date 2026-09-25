@@ -1,0 +1,2 @@
+# TYPE    LISTEN    TARGET            OPTIONS
+server    5432      127.0.0.1:5432    timeout=12h
